@@ -70,6 +70,37 @@ func TestIsUniqueURL(t *testing.T) {
 	})
 }
 
+func TestIsUniqueRequestKeepsMethods(t *testing.T) {
+	const apiURL = "https://api.example.com/v1/orders"
+
+	t.Run("cors_preflight_does_not_hide_the_real_post", func(t *testing.T) {
+		h := newTestHeadless(t, false, false)
+		require.True(t, h.isUniqueRequest("OPTIONS", apiURL))
+		require.True(t, h.isUniqueRequest("POST", apiURL),
+			"the POST that follows a CORS preflight to the same URL must still be emitted")
+	})
+
+	t.Run("same_method_and_url_is_still_a_duplicate", func(t *testing.T) {
+		h := newTestHeadless(t, false, false)
+		require.True(t, h.isUniqueRequest("POST", apiURL))
+		require.False(t, h.isUniqueRequest("POST", apiURL))
+	})
+
+	t.Run("get_keeps_the_legacy_key", func(t *testing.T) {
+		h := newTestHeadless(t, false, false)
+		require.True(t, h.isUniqueRequest("GET", apiURL))
+		require.False(t, h.isUniqueURL(apiURL), "GET and the method-less helper must share one key")
+		require.False(t, h.isUniqueRequest("", apiURL))
+	})
+
+	t.Run("method_aware_with_ignore_query_params", func(t *testing.T) {
+		h := newTestHeadless(t, true, false)
+		require.True(t, h.isUniqueRequest("OPTIONS", apiURL+"?a=1"))
+		require.True(t, h.isUniqueRequest("POST", apiURL+"?a=2"))
+		require.False(t, h.isUniqueRequest("POST", apiURL+"?a=3"))
+	})
+}
+
 func TestRealRequestTakesPriority(t *testing.T) {
 	h := newTestHeadless(t, false, false)
 

@@ -139,7 +139,7 @@ func (h *Headless) Crawl(URL string) error {
 			// response body for additional discoveries. This ensures that real
 			// results with full response data always take priority over
 			// synthetic Request-only entries produced by performAdditionalAnalysis.
-			isUnique := h.isUniqueURL(rr.Request.URL)
+			isUnique := h.isUniqueRequest(rr.Request.Method, rr.Request.URL)
 
 			// Always run additional analysis regardless of uniqueness so we
 			// don't miss URL discoveries embedded in a response body that the
@@ -240,12 +240,21 @@ func (h *Headless) Close() error {
 }
 
 func (h *Headless) isUniqueURL(rawURL string) bool {
+	return h.isUniqueRequest("", rawURL)
+}
+
+// isUniqueRequest is isUniqueURL that also tells apart non-GET methods, so a CORS
+// preflight (OPTIONS) does not hide the real POST to the same URL.
+func (h *Headless) isUniqueRequest(method, rawURL string) bool {
 	dedupKey := rawURL
 	if h.options.Options.IgnoreQueryParams {
 		dedupKey = utils.ReplaceAllQueryParam(dedupKey, "")
 	}
 	if h.options.Options.FilterSimilar {
 		dedupKey = utils.FingerprintURL(dedupKey, h.pathTrie)
+	}
+	if method != "" && method != "GET" {
+		dedupKey = method + " " + dedupKey
 	}
 	return h.options.UniqueFilter.UniqueURL(dedupKey)
 }
